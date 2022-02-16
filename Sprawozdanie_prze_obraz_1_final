@@ -1,0 +1,721 @@
+Mikołaj Zapotoczny
+Przetwarzanie obrazów 1
+Data wykonania: 09.12.19
+
+
+
+
+
+
+
+
+
+KOD ŹRÓDŁOWY:
+
+
+#include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
+#include<math.h>
+#include<unistd.h>
+
+#define MAX 512            /* Maksymalny rozmiar wczytywanego obrazu */
+#define DL_LINII 1024      /* Dlugosc buforow pomocniczych */
+
+/************************************************************************************
+ * Funkcja wczytuje obraz PGM z pliku do tablicy       	       	       	       	    *
+ *										                                                              *
+ * \param[in] plik_we uchwyt do pliku z obrazem w formacie PGM			                *
+ * \param[out] obraz_pgm tablica, do ktorej zostanie zapisany obraz	         	      *
+ * \param[out] wymx szerokosc obrazka						                                    *
+ * \param[out] wymy wysokosc obrazka						                                    *
+ * \param[out] szarosci liczba odcieni szarosci					                            *
+ * \return liczba wczytanych pikseli						                                    *
+ ************************************************************************************/
+
+int czytaj(FILE *plik_we,int obraz_pgm[][MAX],int *wymx,int *wymy, int *szarosci) {
+  char buf[DL_LINII];      /* bufor pomocniczy do czytania naglowka i komentarzy */
+  int znak;                /* zmienna pomocnicza do czytania komentarzy */
+  int koniec=0;            /* czy napotkano koniec danych w pliku */
+  int i,j;
+
+  /*Sprawdzenie czy podano prawidłowy uchwyt pliku */
+  if (plik_we==NULL) {
+    fprintf(stderr,"Blad: Nie podano uchwytu do pliku\n");
+    return(0);
+  }
+
+  /* Sprawdzenie "numeru magicznego" - powinien być P2 */
+  if (fgets(buf,DL_LINII,plik_we)==NULL)   /* Wczytanie pierwszej linii pliku do bufora */
+    koniec=1;                              /* Nie udalo sie? Koniec danych! */
+
+  if ( (buf[0]!='P') || (buf[1]!='2') || koniec) {  /* Czy jest magiczne "P2"? */
+    fprintf(stderr,"Blad: To nie jest plik PGM\n");
+    return(0);
+  }
+
+  /* Pominiecie komentarzy */
+  do {
+    if ((znak=fgetc(plik_we))=='#') {         /* Czy linia rozpoczyna sie od znaku '#'? */
+      if (fgets(buf,DL_LINII,plik_we)==NULL)  /* Przeczytaj ja do bufora                */
+	koniec=1;                                 /* Zapamietaj ewentualny koniec danych    */
+    }  else {
+      ungetc(znak,plik_we);                   /* Gdy przeczytany znak z poczatku linii */
+    }                                         /* nie jest '#' zwroc go                 */
+  } while (znak=='#' && !koniec);   /* Powtarzaj dopoki sa linie komentarza */
+                                    /* i nie nastapil koniec danych         */
+
+  /* Pobranie wymiarow obrazu i liczby odcieni szarosci */
+  if (fscanf(plik_we,"%d %d %d",wymx,wymy,szarosci)!=3) {
+    fprintf(stderr,"Blad: Brak wymiarow obrazu lub liczby stopni szarosci\n");
+    return(0);
+  }
+
+  /* Pobranie obrazu i zapisanie w tablicy obraz_pgm*/
+  for (i=0;i<*wymy;i++) {
+    for (j=0;j<*wymx;j++) {
+      if (fscanf(plik_we,"%d",&(obraz_pgm[i][j]))!=1) {
+	fprintf(stderr,"Blad: Niewlasciwe wymiary obrazu\n");
+	return(0);
+      }
+    }
+  }
+  return *wymx* *wymy;   /* Czytanie zakonczone sukcesem    */
+}                        /* Zwroc liczbe wczytanych pikseli */
+
+
+
+
+
+/* Wyswietlenie obrazu o zadanej nazwie za pomoca programu "display"   */
+void wyswietl(char *n_pliku) {
+  char polecenie[DL_LINII];      /* bufor pomocniczy do zestawienia polecenia */
+
+  strcpy(polecenie,"display ");  /* konstrukcja polecenia postaci */
+  strcat(polecenie,n_pliku);     /* display "nazwa_pliku" &       */
+  strcat(polecenie," &");
+  printf("%s\n",polecenie);      /* wydruk kontrolny polecenia */
+  system(polecenie);             /* wykonanie polecenia        */
+}
+
+
+
+/* Tutaj zaczyna się fragment programu, który pisałem bądź edytowałem */
+
+
+/* Zapisanie obrazu do pliku o zadanej nazwie */
+void zapis (FILE* plik,int wymx, int wymy, int szarosci, int tab[][MAX])
+{
+ fprintf (plik, "P2\n");                                        /* Wypisanie do pliku znaku magicznego w 1 linijce */
+ fprintf (plik, "%d %d\n",wymx,wymy);                           /* Wypisanie do pliku wymiarów obrazka w 2 linijce */
+ fprintf (plik, "%d\n",szarosci);                               /* Wypisanie do pliku liczby mówiącej o ilości odcieni szarości   */
+ int i,j;
+ for (i=0;i<wymy;i++)                                           /* Wypisywanie do pliku informacji o kolorze kolejnych pikseli,   */
+ {                                                              /* za pomocą zwykłej pętli for */
+    for (j=0; j<wymx; j++)                                      /* Bardzo ważna w tym miejscu jest spacja po '%d', gdyż bez niej  */
+    fprintf (plik, "%d ", tab[i][j]);                           /* nie będzie odstępu pomiędzy kolejnymi informacjami o pikselach */
+ }                                                              /* i obrazek nie wyświetli się poprawnie */
+}
+
+
+/* Negatyw */
+void negatyw (int wymx, int wymy, int szarosci, int tab[][MAX])
+{
+ int i,j;                                                       /* Są tutaj dwie pętle for, które sprawiają, że każdy element zapisany w  */
+ for (i=0; i<wymy; i++)                                         /* tablicy zmieni swoją wartość zgodnie z definicją tworzenia negatywu,   */
+ for (j=0; j<wymx; j++)                                         /* a więc im 'bielszy' jest element tym będzie 'ciemniejszy' po wykonaniu */
+  tab[i][j]=szarosci-tab[i][j];                                 /* funkcji. Ta zmiana jest zobrazowana w 4 linijce kodu funkji */ 
+}
+
+
+/* Progowanie */
+void progowanie (int wymx, int wymy, int szarosci, int tab[][MAX],int prog)
+{
+ int i,j;
+ for (i=0; i<wymy; i++)
+ for (j=0; j<wymx; j++)
+  if (tab[i][j]<=szarosci*prog/100.0)                           /* Ten if sprawdza, czy dany piksel jest pod czy nad podanym progiem w %     */
+  {          
+      tab[i][j]=0;                                              /* Każda wartość, która jest pod progiem dostaje wartość 0, a każda, która   */
+  }                                                             /* jest nad progiem otrzymuje wartość równą maksymalnemu odcieniowi szarości */
+  else
+  {
+      tab[i][j]=szarosci;
+  }
+}
+
+
+/* Zmiana poziomów */
+void zmiana_poziomow (int wymx, int wymy, int szarosci, int tab[][MAX],int czern,int biel)
+{
+int i,j;
+int cz,bie;
+
+cz=szarosci*czern/100.0;                                        /* Przedstawienie danych w % */
+bie=szarosci*biel/100.0;
+                                                                /* W podanym warunku są rozważone wszystkie przypadki tworzenia nowych poziomów  */
+for (i=0; i<wymy; i++)                                          /* bieli i czerni w programie, podane w pliku z informacjami do tego zadania     */
+for (j=0; j<wymx; j++)
+  {
+    if (tab[i][j]<=cz)                                             
+    {                                                           /* Wartości poniżej nowej wartości czerni otrzymują wartość 0 */
+      tab[i][j]=0;                                                
+    }     
+    else if (cz<tab[i][j] && tab[i][j]<bie)                     /* Wartości pośrednie są rozciągane na wszystkie poziomy szarości zawarte */
+    {                                                           /* w obrazie */
+      tab[i][j]=(tab[i][j]-cz)*(szarosci/(bie-cz));
+    }
+    else                                                        /* Wartości powyżej nowej wartości bieli otrzymają wartość */
+      tab[i][j]=szarosci;                                       /* maksymalną dla danego programu */
+  }
+}
+
+
+/* Konturowanie */
+void konturowanie (int wymx, int wymy, int szarosci, int tab[][MAX])       /* Wyostrzanie konturów obrazu */
+{
+int i,j;
+for (i=0; i<wymy-1; i++)                                                   /* W tym miejscu '-1' w pętli, bo w przeciwnym wypadku przejdziemy poza zakres    */
+for (j=0; j<wymx-1; j++)                                                   /* tablicy (segmentation fault), a 1 piksel doda tylko ramkę o grubości 1 piksela */
+    tab[i][j]=abs(tab[i+1][j]-tab[i][j])+abs(tab[i][j+1]-tab[i][j]);       /* 'abs' z biblioteki matematycznej to moduł */
+}
+
+
+/* DODATKOWE - Rozciąganie hitogramu */
+void histogram (int wymx, int wymy, int szarosci, int tab[][MAX])           /* Może być nie zawsze widoczne, bo ta operacja ma sens gdy nie w pełni jest */
+{                                                                           /* wykorzystywany zakres odcieni szarości obrazka */
+int i,j;
+int min=tab[0][0],max=tab[0][0];                                            /* Inicjuję w ten sposób, aby potem porównywać z każdym innym elementem */
+                                                                            /* W ten sposób unikam błędów wartości skrajnych */
+for (i=0; i<wymy; i++)
+for (j=0; j<wymx; j++)
+{
+    if (min>tab[i][j])                                                      /* Szukanie wartości minimalnej i maksymalnej odcieni szarości w całym obrazku */
+        min=tab[i][j];
+
+    if (max<tab[i][j])
+        max=tab[i][j];
+}
+for (i=0; i<wymy; i++)
+for (j=0; j<wymx; j++)
+    tab[i][j]=(tab[i][j]-min)*(szarosci/(max-min));                         /* Rozciąganie wartości wszystkich pikseli (o ile ma to sens) do wartości bardziej */
+}                                                                           /* wyśrodkowanych; w pełni wykorzystujących zadeklarowane możliwości obrazka */
+
+
+
+
+
+/* Funkcja główna */
+int main() 
+{
+  int obraz[MAX][MAX];              /* do maksymalnych wymiarów obrazka                                   */
+  int wymx,wymy;                    /* szerokosc i wysokosc obrazka                                       */
+  int odcieni;                      /* ilość odcieni szarości                                             */
+  int prog;                         /* zmienna potrzebna do ustalania progu w progowaniu                  */
+  char menu;                        /* zmienna pomocnicza do menu                                         */
+  int odczytano=0;                  /* zmienna potrzebna do czytania obrazka oraz do sprawdzania błędów   */
+  FILE *plik;                       /* zmienna wskaźnikowa dzięki której czytamy i zapisujemy obrazek     */
+  char nazwa[100];                  /* tablica przechowywująca nazwę obrazka                              */
+  int biel,czern;                   /* dwie zmienne potrzebne do zmiany poziomów czerni i bieli           */
+  
+
+
+  system("clear");
+while(1)
+{
+  printf("Program do edycji obrazkow PGM\nOpcje programu:\n\n");
+  printf("Wykonujac operacje zmiany obrazka bazowego nalezy za kazdym razem wczytywac obrazek, \n");
+  printf("bo w przeciwnym wypadku bedzie sie wykonywac, np progowanie na obrazku po konturowaniu.\n\n");
+  /* menu */
+  printf("Kliknij 'o' aby wczytac plik\n");        
+  printf("Kliknij 'z' aby zapisac plik\n");
+  printf("Kliknij 'w' aby wyswietlic plik bez zapisu\n");
+  printf("Kliknij 'k' aby wykonac konturowanie\n");
+  printf("Kliknij 'n' aby wykonac negatyw\n");
+  printf("Kliknij 'd' aby wykonac zmiane poziomow\n");
+  printf("Kliknij 'p' aby wykonac progowanie\n");
+  printf("Kliknij 'h' aby wykonac rozciaganie histogramu\n");
+  printf("Kliknij 'x' aby zakonczyc\n\n");
+
+  printf("Co chcesz zrobić: ");
+  scanf ("%c",&menu);
+
+  switch(menu)                                                  /* Menu najprościej robi się za pomocą switch'a */
+  {
+    case 'o'://odczyt
+      printf("Podaj nazwe pliku: ");
+      scanf("%s",nazwa);//&nazwa[0]
+      plik=fopen(nazwa,"r");                                    /* Otworzenie pliku do 'r', a zatem do odczytu */
+
+      if(plik!=NULL)
+      {
+        odczytano=czytaj (plik,obraz,&wymx,&wymy,&odcieni);     /* Wywołanie funkcji czytaj. To co zwraca ta funkcja jest przypisywane do zmiennej odczytano */ 
+        fclose(plik);                                           /* Zamknięcie pliku */
+        printf("Wykonano poprawnie :)");
+      }
+      else
+        fprintf(stderr,"BLAD, podales bledna nazwe\n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'z'://zapis
+      if (odczytano!=0)
+        {
+         printf("Podaj nazwe pliku do zapisu: ");
+         scanf("%s",nazwa);//&nazwa[0]
+         plik=fopen(nazwa,"w");                                   /* Otworzenie pliku do pisania w nim     */
+         zapis (plik,wymx,wymy,odcieni,obraz);                    /* Wywołanie funkcji: zapis              */
+         fclose(plik);                                            /* Zamknięcie pliku                      */
+         printf("Wykonano poprawnie :)");
+        }
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'w'://wyświetlenie
+      if (odczytano!=0)                                           /* Sprawdzenie czy został wczytany plik  */
+        wyswietl (nazwa);                                         /* Wywołanie funkcji: wyświetl           */
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'k'://konturowanie
+      if (odczytano!=0)
+      {
+        konturowanie (wymx,wymy,odcieni,obraz);                   /* Wywołanie funkcji: konturowanie       */
+        plik=fopen("tmp","w");                                    /* Otworzenie pliku do pisania w nim     */
+        zapis(plik,wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: zapis              */
+        fclose(plik);                                             /* Zamknięcie pliku                      */
+        wyswietl("tmp");                                          /* Wywołanie funkcji: wyświetl           */
+      }
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'n'://negatyw
+      if (odczytano!=0)
+      {
+        negatyw (wymx,wymy,odcieni,obraz);                        /* Wywołanie funkcji: negatyw            */
+        plik=fopen("tmp","w");                                    /* Otworzenie pliku do pisania w nim     */
+        zapis(plik,wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: zapis              */
+        fclose(plik);                                             /* Zamknięcie pliku                      */
+        wyswietl("tmp");                                          /* Wywołanie funkcji: wyświetl           */
+      }
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'p'://progowanie
+      if (odczytano!=0)                 
+      {
+        printf("Podaj prog od 0 do 100: ");
+        scanf("%d",&prog);                                          /* Podanie progu */
+        if (prog<=100 && prog>=0)                                   /* Warunek wynikający z podawania progu w procentach */
+        {                                                         
+          progowanie (wymx,wymy,odcieni,obraz,prog);                /* Wywołanie funkcji: progowanie         */
+          plik=fopen("tmp","w");                                    /* Otworzenie pliku do pisania w nim     */
+          zapis(plik,wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: zapis              */
+          fclose(plik);                                             /* Zamknięcie pliku                      */
+          wyswietl("tmp");                                          /* Wywołanie funkcji: wyświetl           */
+        }
+        else 
+          fprintf(stderr,"BLAD: prog moze byc od 0 do 100 \n");
+      }
+    else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");           /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'd'://zmiana poziomów
+      if (odczytano!=0)
+      {
+       printf("Pamietaj, ze czern < biel!\n\n");                    /* Podanie w % zmian poziomów dla bieli i czerni */
+       printf("Podaj czern od 0 do 100: ");
+       scanf("%d",&czern);
+       printf("Podaj biel od 0 do 100: ");
+       scanf("%d",&biel);
+
+        if ((czern>=0 && czern<=100) && (biel>=0 && biel<=100) && czern<biel)
+        {                                                           /* Warunki wynikające z własności zmiany poziomów */
+          zmiana_poziomow (wymx,wymy,odcieni,obraz,czern,biel);     /* Wywołanie funkcji: zmiana_poziomow    */
+          plik=fopen("tmp","w");                                    /* Otworzenie pliku do pisania w nim     */
+          zapis(plik,wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: zapis              */
+          fclose(plik);                                             /* Zamknięcie pliku                      */
+          wyswietl("tmp");                                          /* Wywołanie funkcji: wyświetl           */
+        }
+        else 
+          fprintf(stderr,"\nBLAD: nie spelnasz co najmniej jednego z warunkow:\n1. czern i biel naleza do przedzialu (0,100)\n2. czern < biel \n"); 
+      }
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+
+    case 'h'://rozciąganie histogramu
+      if (odczytano != 0)
+      {
+        histogram (wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: histogram          */
+        plik=fopen("tmp","w");                                    /* Otworzenie pliku do pisania w nim     */
+        zapis(plik,wymx,wymy,odcieni,obraz);                      /* Wywołanie funkcji: zapis              */
+        fclose(plik);                                             /* Zamknięcie pliku                      */
+        wyswietl("tmp");                                          /* Wywołanie funkcji: wyświetl           */
+      }
+      else
+        fprintf(stderr,"BLAD: najpierw wczytaj plik \n");         /* Komunikat w razie błędu na standardowe wyjście */
+    break;
+
+    case 'x':
+      printf("KONIEC\n");                                         /* Zakończenie programu      */
+      system("rm tmp");                                           /* Usuwa tymczasowy plik tmp */ 
+      return 0;
+    break;
+
+    default:
+      fprintf(stderr,"BLAD: zly znak \n");                        /* Komunikat w razie wpisania znaku nie będącego na liście */
+
+    }
+    scanf ("%c",&menu);                                           /* Wprowadzenie zmiennej, aby getchar() działał */
+    //sleep (1);                                                  /* Ewentualna możliwość zastosowania funkcji sleep() zamiast getchar()          */
+    printf("\n\nAby przejsc dalej kliknij 'Enter'");              /* Polecenie sleep(1) czeka 1 sekundę i przechodzi dalej w programie            */
+    getchar();                                                    /* Polecenie getchar() czeka na wprowadzenie jakiejś danej aby przejść dalej    */
+    system("clear");                                              /* Polecenie system("") pozwala na użycie poleceń terminala w naszym programie, */
+}                                                                 /* w tym przypadku umożliwia korzystanie z 'clear' */
+
+return odczytano;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+TESTY PROGRAMU (program był testowany dwukrotnie: najpierw w trakcie pisania na bieżąco oraz po napisaniu całości):
+
+
+1. Informacje początkowe
+Test ma na celu sprawdzenie poprawności informacji wyświetlanych po uruchomieniu programu.
+Po uruchomieniu programu wyświetla się menu wraz z uwagami i informacjami pomocniczymi.
+Program wyświetla przejrzyste, poprawne informacje.
+
+
+*Do dalszych testów spreparowałem dwa obrazki w formacie PGM (program był testowany dla obu):
+
+-Pierwszy obrazek o nazwie 'a':
+P2
+5 5
+10
+8 1 3 1 9
+3 0 8 0 7
+1 1 5 2 10
+6 4 0 1 7
+9 4 5 1 10
+
+-Drugi obrazek o nazwie 'b':
+P2
+5 5
+10
+1 4 3 1 4
+1 0 1 0 0
+1 1 2 2 1
+1 2 0 1 1
+1 2 0 1 0
+
+Obrazki zostały dołączone do plików przesłanych do oceny.
+
+
+
+
+
+2. Funkcja 'czytaj'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'o'.
+ Wprowadziłem 'o', a program wyświetlił zapytanie o nazwę pliku, więc stwierdzam, że jest to wykonywane poprawnie.
+ 
+-Test ma na celu sprawdzenie poprawnego czytania nazwy istniejącego pliku i wczytywanie pliku.
+ Wprowadziłem nazwę pliku: 'a' (w drugim przypadku 'b'), wyświetlił sie komunikat: 'Wykonano poprawnie :)', więc stwierdzam, że wczytywanie pliku działa poprawnie.
+
+-Test ma na celu sprawdzenie poprawnego czytania nazwy nie istniejącego pliku (blędnej nazwy).
+ Wprowadziłem nazwę pliku: 'r', wyświetlił sie komunikat: 'BLAD, podales bledna nazwe', więc plik nie został wczytany, co oznacza, że ten element funkcji działa poprawnie
+
+Na podstawie powyższych testów stwierdzam, że funkcja 'czytaj' działa poprawnie. (ten test zostanie zweryfikowany dlaszymi testami funkcji 'zapis')
+
+
+
+3. Funkcja 'zapis'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'z'.
+ Wprowadziłem 'z', a program wyświetlił zapytanie o nazwę pliku do zapisu, więc stwierdzam, że jest to wykonywane poprawnie.
+
+-Test ma na celu sprawdzenie działanie funkcji przy poprawnie wczytanym pliku.
+ Po podaniu nazwy: 'obraz', wyświetlił sie komunikat: 'Wykonano poprawnie :)', ponadto w folderze zawierającym program pojawił się plik o nazwie 'obraz' będący idealną kopią obrazów 'a' lub 'b' (w zależności od tego, który obraz był aktualnie testowany), więc stwierdzam, że zapisywanie pliku działa poprawnie.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'z' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+Na podstawie powyższych testów stwierdzam, że funkcja 'zapis' działa poprawnie. Co więcej poprawne działanie tej funkcji potwierdza tezę, że funkcja 'czytaj' napewno też jest poprawna.
+
+
+
+4. Funkcja 'wyswietl'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'w'.
+ Wprowadziłem 'w', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'w' wyświetla się komunikat: 'display a &' ('display b &') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'w' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-W trakcie prowadzenia testów na diablo i panamincie wykonanie tej operacji zawsze zabierało nieco więcej czasu niż na moim komputerze (musiałem odczekać 5-10 sekund aby zobaczyć wyświetlony wynik działania). To samo dotyczy też wyświetlania wyników pracy poszczególnych funkcji.
+
+Na podstawie powyższych testów stwierdzam, że funkcja 'wyswietl' działa poprawnie. 
+
+
+
+5. Funkcja 'konturowanie'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'k'.
+ Wprowadziłem 'k', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'k' wyświetla się komunikat: 'display tmp &' (dla 'a' i dla 'b') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'k' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-Test ma na celu sprawdzenie zapisanych obrazków po wykonaniu się funkcji.
+   *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+12 3 7 9 9 5 9 11 9 7 5 7 8 9 10 5 4 6 6 7 9 4 5 1 10
+   
+   *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+3 5 4 4 4 1 2 2 2 0 0 2 2 2 1 1 2 1 0 1 1 2 0 1 0 
+
+Oba obrazki zostały przetworzone w odpowiedni sposób, gdyż wszystkie wartości zgadzają się z podanym wzorem.
+Na podstawie powyższych testów stwierdzam, że funkcja 'konturowanie' działa poprawnie. 
+
+
+
+6. Funkcja 'negatyw'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'n'.
+ Wprowadziłem 'n', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'n' wyświetla się komunikat: 'display tmp &' (dla 'a' i dla 'b') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'k' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-Test ma na celu sprawdzenie zapisanych obrazków po wykonaniu się funkcji.
+   *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+2 9 7 9 1 7 10 2 10 3 9 9 5 8 0 4 6 10 9 3 1 6 5 9 0 
+
+   *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+9 6 7 9 6 9 10 9 10 10 9 9 8 8 9 9 8 10 9 9 9 8 10 9 10 
+
+Oba obrazki zostały przetworzone w odpowiedni sposób, gdyż wszystkie wartości zgadzają się z podanym wzorem.
+Na podstawie powyższych testów stwierdzam, że funkcja 'negatyw' działa poprawnie. 
+
+
+
+7. Funkcja 'zmiana_poziomow'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'd'.
+ Wprowadziłem 'd', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'd' wyświetla się polecenie, aby wprowadzić nowe poziomy czerni i bieli oraz warunki, które muszą być spełnione dla poprawnego działania funkcji ((czern>=0 && czern<=100) && (biel>=0 && biel<=100) && czern<biel).
+
+   *Dane spełniające trzy warunki wyświetlone przez funkcję (czern: 30, biel: 70)
+    Wyświetlił się komunikat: 'display tmp &' (dla 'a' i dla 'b') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+
+   *Dane nie spełniające jedego lub więcej warunków
+   (czern: -10, biel: -20); (czern: 120, biel: 110) - nie spełniają 3 warunków
+   (czern: 90, biel: -10);  (czern: -10, biel: 120); (czern: 120, biel: 50) - nie spełniają 2 warunków
+   (czern: -10, biel: 70);  (czern: 10, biel: 120);  (czern: 50, biel: 40); - nie spełniają 1 warunku
+   Dla wszystkich niepoprawnych danych wyświetla się komunikat: 
+   'BLAD: nie spelniasz co najmniej jednego z warunków:
+   1. czern i biel naleza do przedzialu (0,100)
+   2. czern < biel',    więc stwierdzam, że program poprawnie działa dla niepoprawnych danych
+
+   *Dane skrajne
+    -czern=biel,   - wyświetla się komunikat o błędzie (program reaguje poprawnie)
+    -czern=0,      - (biel=40) wyświetla się: 'display tmp &' i wyświetla się obrazek (program reaguje poprawnie)
+    -czern=100,    - brak możliwej poprawnej wartości bieli, a zatem wyświetla się komunikat o błędzie (program reaguje poprawnie)
+    -biel=0,       - brak możliwej poprawnej wartości czerni, a zatem wyświetla się komunikat o błędzie (program reaguje poprawnie)
+    -biel=100,     - (czern=40) wyświetla się: 'display tmp &' i wyświetla się obrazek (program reaguje poprawnie)
+    -biel=100, czern=0 - wyświetla się: 'display tmp &' i wyświetla się obrazek (program reaguje poprawnie), ale wprowadzony plik nie zmienia się, bo tak naprawde poziomy nie zostały zmienione.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'd' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-Test ma na celu sprawdzenie zapisanych obrazków po poprawnym wykonaniu się funkcji (czern: 30, biel: 70).
+   *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+10 0 0 0 10 0 0 10 0 10 0 0 4 0 10 6 2 0 0 10 10 2 4 0 10
+
+   *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+0 2 0 0 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+
+Oba obrazki zostały przetworzone w odpowiedni sposób, gdyż wszystkie wartości zgadzają się z podanym wzorem.
+Na podstawie powyższych testów stwierdzam, że funkcja 'zmiana_poziomow' działa poprawnie. 
+
+
+
+8. Funkcja 'progowanie'
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'p'.
+ Wprowadziłem 'p', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'p' wyświetla się polecenie, aby wprowadzić próg wraz z założeniem, aby był w %, czyli od 0 do 100
+
+   *Dane spełniające warunek (prog: 20)
+    Wyświetlił się komunikat: 'display tmp &' (dla 'a' i dla 'b') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+   
+   *Dane nie spełniające warunku (prog: -5; prog: 110)
+   Dla wszystkich niepoprawnych danych wyświetla się komunikat: 
+   'BLAD: prog moze byc od 0 do 100', więc stwierdzam, że program poprawnie działa dla niepoprawnych danych
+
+   *Dane skrajne
+   -prog=0
+       *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:   
+       P2
+       5 5
+       10
+       10 10 10 10 10 10 0 10 0 10 10 10 10 10 10 10 10 0 10 10 10 10 10 10 10
+ 
+       *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+       P2
+       5 5
+       10
+       10 10 10 10 10 10 0 10 0 0 10 10 10 10 10 10 10 0 10 10 10 10 0 10 0 
+   Funkcja działa poprawnie (zgodnie ze wzorem) dla prog=0.
+
+   -prog=100
+       *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:   
+       P2
+       5 5
+       10
+       0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+ 
+       *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+       P2
+       5 5
+       10
+       0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+   Funkcja działa poprawnie (zgodnie ze wzorem) dla prog=100.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'p' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-Test ma na celu sprawdzenie zapisanych obrazków po poprawnym wykonaniu się funkcji (prog: 20).
+   *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+10 0 10 0 10 10 0 10 0 10 0 0 10 0 10 10 10 0 0 10 10 10 10 0 10  
+   
+   *Obrazek 'b', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+0 10 10 0 10 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+
+Oba obrazki zostały przetworzone w odpowiedni sposób, gdyż wszystkie wartości zgadzają się z podanym wzorem.
+Na podstawie powyższych testów stwierdzam, że funkcja 'progowanie' działa poprawnie. 
+
+
+
+9. Funkcja 'histogram' (dodatkowa)
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'h'.
+ Wprowadziłem 'h', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+
+-Test ma na celu sprawdzenie działania funkcji przy poprawnie wczytanym pliku.
+ Po wprowadzeniu 'h' wyświetla się komunikat: 'display tmp &' (dla 'a' i dla 'b') oraz uruchamia się program 'display', który umożliwia podgląd obrazka, więc stwierdzam, że w tym aspekcie funkcja działa poprawnie.
+
+-Test ma na celu sprawdzenie zachowania funkcji przy braku wczytanego pliku.
+ Po wprowadzeniu 'h' na samym początku działania programu został wyświetlony komunikat: 'BLAD, najpierw wczytaj plik', więc stwierdzam, że zachowanie funkcji dla braku wczytanego pliku jest poprawne.
+
+-Test ma na celu sprawdzenie zapisanych obrazków po wykonaniu się funkcji.
+   *Obrazek 'a', po wykonaniu się funkcji wygląda następująco:
+P2
+5 5
+10
+8 1 3 1 9 3 0 8 0 7 1 1 5 2 10 6 4 0 1 7 9 4 5 1 10
+Brak widocznych zmian, bo odcienie szarości są wykorzystywane w pełni.
+
+   *Obrazek 'b', po wykonaniu się funkcji  wygląda następująco:
+P2
+5 5
+10
+2 8 6 2 8 2 0 2 0 0 2 2 4 4 2 2 4 0 2 2 2 4 0 2 0 
+Są widoczne zmiany, bo odcienie szarości nie były wykorzystywane w pełni.
+ 
+Oba obrazki zostały przetworzone w odpowiedni sposób, gdyż wszystkie wartości zgadzają się z podanym wzorem.
+Na podstawie powyższych testów stwierdzam, że funkcja 'histogram' działa poprawnie. 
+
+
+
+10. Inne techniczne sprawy programu
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla 'x'.
+ Wprowadziłem 'x', a funkcja nie wyrzuciła błądu, więc stwierdzam, że ten element działa poprawnie.
+ Ponadto program zakończył swoje działanie, więc ten elemant również spełnia swoją rolę.
+
+-Test ma na celu sprawdzenie poprawne działanie polecenia 'switch' dla niepoprawnego znaku.
+ Wprowadziłem 'q', a funkcja wyświetliła komunikat: 'BLAD: zly znak', więc stwierdzam, że 'switch' reaguje poprawnie na błedne dane.
+
+-Test ma na celu sprawdzenie polecenia 'getchar()' i 'system("clear")'.
+ Po każdorazowym zakończeniu działania jakiejś funkcji pojawia się komunikat: 'Aby przejsc dalej kliknij Enter'. Po wykonaniu polecenia ekran jest czyszczony oraz zostaje wyświetlone tylko początkowe menu programu, więc stwierdzam, że program w tym aspekcie działa poprawnie.
+
+
+
+PODSUMOWANIE:
+
+Testy zostały przeprowadzone na komputerach: diablo, panamint i moim domowym.
+Nie zauważyłem żadnych różnic w działaniu programu na każdym z komputerów.
+
+Testy zostały również przeprowadzone z użyciem kompilatorów: gcc i cc.
+Kompilator cc wyświetlił tylko ostrzeżenie: 'line: 367: warning: statement not reached', ale nie wpływa to w żaden sposób na działanie programu.
+
+Program działa poprawnie dla wszystkich poprawnych danych wejściowych.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
